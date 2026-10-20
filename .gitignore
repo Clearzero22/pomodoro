@@ -1,0 +1,16 @@
+/target
+*.log
+# Screenshots from local verification runs.
+/*.png
+/dist
+crates/pomodoro-web/www/node_modules
+crates/pomodoro-web/www/dist
+crates/pomodoro-web/www/src/wasm
+mobile/node_modules
+mobile/android/local.properties
+mobile/ios
+# 项目内固定的 Android 构建工具链（~300 MB，按 docs/mobile.md 获取）
+/tools
+mobile/android/build
+mobile/android/app/build
+mobile/android/.gradle

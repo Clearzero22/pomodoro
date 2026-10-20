@@ -1,0 +1,24 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/pomodoro",
+    "crates/pomodoro-desktop",
+    "crates/pomodoro-web",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace.dependencies]
+# The application layer. `gpui-kit` is the only dependency an application needs;
+# it pins the matching GPUI snapshot and re-exports GPUI, base, component and assets.
+gpui-kit = { path = "../gpui-kit/crates/kit" }
+# The shared business logic, compiled into both the desktop and the web entry point.
+pomodoro = { path = "crates/pomodoro" }
+# `std::time::Instant::now()` panics with "time not implemented on this platform"
+# on wasm32-unknown-unknown. `instant` is the same clock backed by
+# `performance.now()` there and by std elsewhere, so the timer code can be
+# written once. GPUI Kit's own layers depend on it for the same reason.
+instant = { version = "0.1", features = ["wasm-bindgen"] }

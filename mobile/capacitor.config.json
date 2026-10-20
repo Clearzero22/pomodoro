@@ -1,0 +1,17 @@
+{
+  "appId": "com.example.pomodoro",
+  "appName": "番茄钟",
+  "webDir": "../crates/pomodoro-web/www/dist",
+  "bundledWebRuntime": false,
+  "android": {
+    "allowMixedContent": false,
+    "webContentsDebuggingEnabled": false
+  },
+  "ios": {
+    "contentInset": "never",
+    "limitsNavigationsToAppBoundDomains": true
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}

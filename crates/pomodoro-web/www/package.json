@@ -1,0 +1,19 @@
+{
+  "name": "pomodoro-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --bun vite",
+    "build": "bun --bun vite build",
+    "preview": "bun --bun vite preview"
+  },
+  "dependencies": {
+    "@capacitor/core": "^7",
+    "@capacitor/local-notifications": "^7"
+  },
+  "devDependencies": {
+    "vite": "^8",
+    "vite-plugin-wasm": "^3.5.0"
+  }
+}

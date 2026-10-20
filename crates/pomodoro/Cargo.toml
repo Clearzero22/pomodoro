@@ -1,0 +1,16 @@
+[package]
+name = "pomodoro"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[features]
+# GPUI 的测试夹具：在无头窗口里渲染真实组件、派发指针和键盘事件。
+test-support = ["gpui-kit/test-support"]
+
+[dependencies]
+gpui-kit = { workspace = true }
+instant = { workspace = true }
+
+[dev-dependencies]
+gpui-kit = { workspace = true, features = ["test-support"] }

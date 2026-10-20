@@ -1,0 +1,20 @@
+{
+  "name": "pomodoro-mobile",
+  "version": "0.1.0",
+  "private": true,
+  "description": "iOS/Android 壳：把同一份 WASM 产物装进原生 WebView，用于上架 App Store / Play Store",
+  "scripts": {
+    "sync": "cap sync",
+    "assets": "capacitor-assets generate",
+    "open:android": "cap open android",
+    "open:ios": "cap open ios"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^7",
+    "@capacitor/assets": "^3",
+    "@capacitor/cli": "^7",
+    "@capacitor/core": "^7",
+    "@capacitor/ios": "^7",
+    "@capacitor/local-notifications": "^7"
+  }
+}

@@ -1,0 +1,6 @@
+[toolchain]
+# WebAssembly 目标需要 nightly，桌面端在 nightly 上同样可以构建，
+# 因此整个工作区统一锁定同一个工具链，避免两个入口用不同编译器。
+channel = "nightly"
+components = ["rustfmt", "clippy"]
+targets = ["wasm32-unknown-unknown"]
