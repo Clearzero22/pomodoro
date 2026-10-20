@@ -26,6 +26,10 @@
 //! ticker 只做两件事：推进阶段边界、`cx.notify()`。它不碰窗口，因此不会因为
 //! 「实体没有关联窗口」这类失败而中断。
 
+pub mod api;
+pub mod model;
+pub mod store;
+
 use instant::{Duration, Instant};
 use std::rc::Rc;
 
@@ -55,7 +59,7 @@ const MAX_CATCH_UP_STEPS: usize = 64;
 actions!(pomodoro, [ToggleTimer, ResetTimer]);
 
 /// 番茄钟当前所处的阶段。
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
 pub enum Phase {
     /// 专注工作。
     Focus,

@@ -22,3 +22,9 @@ pomodoro = { path = "crates/pomodoro" }
 # `performance.now()` there and by std elsewhere, so the timer code can be
 # written once. GPUI Kit's own layers depend on it for the same reason.
 instant = { version = "0.1", features = ["wasm-bindgen"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+uuid = { version = "1.4", features = ["v4", "serde", "js"] }
+async-trait = "0.1"
+chrono = { version = "0.4", features = ["serde", "wasm-bindgen"] }
+thiserror = "1.0"
