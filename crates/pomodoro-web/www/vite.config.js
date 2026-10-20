@@ -2,6 +2,8 @@ import { defineConfig } from 'vite';
 import wasm from 'vite-plugin-wasm';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
+import crypto from 'crypto';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -12,10 +14,58 @@ const ICONS_DIR = path.resolve(__dirname, '../../../../gpui-kit/crates/assets/as
 // 部署到子路径时用 `VITE_BASE=/pomodoro/ bun run build`，默认部署在站点根。
 const base = process.env.VITE_BASE ?? '/';
 
+/**
+ * 把构建版本号注入 `sw.js` 的缓存名。
+ *
+ * 版本号取自 wasm 产物（`src/wasm/*.wasm`）的内容哈希：内容变了哈希就变，
+ * 缓存名跟着变，Service Worker 的 activate 阶段会清掉所有旧缓存。
+ * 否则发新版后旧缓存还在，新 HTML 引用的带哈希资源既不在缓存里、
+ * 服务器上也已经改名，会 404 并卡在启动页。
+ */
+function swVersion() {
+  return {
+    name: 'sw-version',
+    apply: 'build',
+    generateBundle(_options, bundle) {
+      const hashes = [];
+      for (const fileName of Object.keys(bundle)) {
+        if (fileName.endsWith('.wasm')) {
+          const chunk = bundle[fileName];
+          if (chunk.type === 'asset' && chunk.source) {
+            hashes.push(crypto.createHash('sha256').update(chunk.source).digest('hex'));
+          }
+        }
+      }
+      // 没有 wasm 时退回用产物目录的文件名列表算一个版本。
+      if (hashes.length === 0) {
+        const distDir = path.resolve(__dirname, 'dist');
+        if (fs.existsSync(distDir)) {
+          for (const name of fs.readdirSync(distDir).sort()) {
+            hashes.push(name);
+          }
+        }
+      }
+      const version = crypto
+        .createHash('sha256')
+        .update(hashes.join('|'))
+        .digest('hex')
+        .slice(0, 12);
+
+      // `public/` 下的文件不进 bundle，单独处理。
+      const swPath = path.resolve(__dirname, 'dist/sw.js');
+      if (fs.existsSync(swPath)) {
+        const sw = fs.readFileSync(swPath, 'utf8');
+        fs.writeFileSync(swPath, sw.replace(/__BUILD_VERSION__/g, version));
+      }
+    },
+  };
+}
+
 export default defineConfig({
   base,
   plugins: [
     wasm(),
+    swVersion(),
     {
       name: 'serve-icons',
       configureServer(server) {

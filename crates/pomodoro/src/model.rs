@@ -76,12 +76,20 @@ impl DailyStat {
     }
 }
 
-/// 创建/更新时的 DTO（id 由 server 或客户端生成）
+/// 创建/更新时的 DTO。
+///
+/// `id` 由**客户端**生成并带上，服务端原样保存。这样本地记录和云端记录
+/// 的主键一致，同步时才能把两边对上（否则两边各生成一个 id，合并时
+/// 会变成两条重复记录）。
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CreateRecordRequest {
+    /// 客户端生成的 uuid v4。
+    pub id: String,
     pub title: Option<String>,
     pub phase: Phase,
     pub duration_secs: u32,
+    /// 完成时刻（unix 秒）。客户端本地记录的时间。
+    pub completed_at: i64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

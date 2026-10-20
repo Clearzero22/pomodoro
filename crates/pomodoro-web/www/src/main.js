@@ -51,7 +51,11 @@ async function init() {
     const backend = import.meta.env.VITE_WEB_BACKEND ??
       (globalThis.Capacitor?.isNativePlatform?.() ? 'webgl' : 'auto');
 
-    await wasm.run(assetEndpoint, backend);
+    // 后端地址。设了 `VITE_API_URL` 才启用联网模式；
+    // 没设就是纯本地（数据在 localStorage），界面完全一样。
+    const apiUrl = import.meta.env.VITE_API_URL ?? null;
+
+    await wasm.run(assetEndpoint, backend, apiUrl);
 
     // 只有真正开窗并画出第一帧之后才算启动完成。
     loadingEl?.remove();

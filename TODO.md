@@ -14,7 +14,7 @@
 | P1 | [006](./todos/006-themes-keybindings.md) | 主题切换 + 快捷键自定义 | ⬜ 待开始 | 1天 |
 | P2 | [007](./todos/007-desktop-packaging.md) | 桌面安装包完善 (Win/macOS/Linux) | ⬜ 待开始 | 1天 |
 | P2 | [008](./todos/008-mobile-enhance.md) | 移动端增强 (安全区/状态栏/离线) | ⬜ 待开始 | 1天 |
-| P0 | [009](./todos/009-cloud-crud.md) | **联网数据 CRUD + 云端同步** | ⬜ 待开始 | 3天 |
+| P0 | [009](./todos/009-cloud-crud.md) | **联网数据 CRUD + 云端同步** | 🟡 M0-M3完成 | 3天 |
 
 ## 里程碑
 

@@ -1,0 +1,44 @@
+[package]
+name = "pomodoro-server"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+# HTTP 框架
+axum = { version = "0.7", features = ["macros"] }
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+
+# 数据
+sqlx = { version = "0.7", features = ["runtime-tokio", "sqlite", "macros"] }
+
+# 序列化
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# 认证
+jsonwebtoken = "9"
+argon2 = "0.5"
+# `password_hash` 把 `rand_core` 重导出了，但 `OsRng` 需要 `getrandom` 特性。
+# 直接依赖 rand_core 并开启该特性，靠 feature 统一把开关传给 password_hash。
+rand_core = { version = "0.6", features = ["getrandom"] }
+
+# 工具
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+
+[lib]
+name = "pomodoro_server"
+path = "src/lib.rs"
+
+[[bin]]
+name = "pomodoro-server"
+path = "src/main.rs"

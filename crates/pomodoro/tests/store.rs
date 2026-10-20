@@ -6,8 +6,8 @@ use pomodoro::model::PomodoroRecord;
 use pomodoro::store::{MemoryPersistence, Store};
 use pomodoro::Phase;
 
-fn store() -> Store<MemoryApi, MemoryPersistence> {
-    Store::new(MemoryApi::new(), MemoryPersistence::default())
+fn store() -> Store {
+    Store::local(MemoryPersistence::default())
 }
 
 #[test]
@@ -40,10 +40,10 @@ fn delete_removes() {
 #[test]
 fn pending_survives_reload_via_persistence() {
     let persist = MemoryPersistence::default();
-    let mut s1 = Store::new(MemoryApi::new(), persist.clone());
+    let mut s1 = Store::local(persist.clone());
     s1.create_local(Some("a".into()), Phase::Focus, 1500);
     s1.create_local(Some("b".into()), Phase::Break, 300);
-    let s2 = Store::new(MemoryApi::new(), persist);
+    let s2 = Store::local(persist);
     assert_eq!(s2.list().len(), 2);
     assert_eq!(s2.pending.len(), 2);
 }
@@ -59,4 +59,13 @@ fn list_by_date_filters() {
     s.records.push(r2);
     let today = r1.date_str();
     assert_eq!(s.list_by_date(&today).len(), 1);
+}
+
+#[test]
+fn online_store_uses_the_given_api() {
+    let api = MemoryApi::new();
+    let s = Store::new(Some(api), MemoryPersistence::default());
+    assert!(s.api().is_some());
+    // 纯本地模式没有 api
+    assert!(store().api().is_none());
 }

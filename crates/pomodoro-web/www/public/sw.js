@@ -10,8 +10,18 @@
 //
 // 原生壳（Capacitor）里不注册 Service Worker：APK 本身就是离线包，
 // 注册只会引入上面那类陈旧缓存问题。见 index.html 的注册条件。
+//
+// # 缓存名必须带版本
+//
+// 缓存名如果写死（`pomodoro-v2`），重新发版后旧缓存不会被清掉：
+// 导航请求虽然走 network-first 能拿到新 HTML，但新 HTML 引用的带哈希资源
+// 在旧缓存里没有、服务器上又已经换成新名字，cache-first 命中不了就 404。
+//
+// 所以缓存名由**构建期注入的版本号**决定（见 `vite.config.js` 的
+// `sw-version` 插件）。版本一变，缓存名就变，activate 阶段会清掉所有旧缓存。
+// 版本号取自构建产物里 wasm 的内容哈希，因此内容变了版本一定变。
 
-const CACHE = 'pomodoro-v2';
+const CACHE = 'pomodoro-__BUILD_VERSION__';
 
 /** 只预缓存不含哈希入口信息的文件。 */
 const PRECACHE = ['./manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
@@ -29,6 +39,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
       .keys()
+      // 版本号变了就等于换了一个缓存空间，旧缓存全部作废。
       .then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key))))
       .then(() => self.clients.claim())
   );

@@ -45,8 +45,7 @@ use gpui_kit::{
     ParentElement as _, Render, Styled as _, Task, Window, actions, div, rems,
 };
 
-use crate::api::MemoryApi;
-use crate::store::{MemoryPersistence, Store};
+use crate::store::Store;
 use gpui_kit::gpui::prelude::FluentBuilder as _;
 
 /// 专注阶段的时长。
@@ -64,7 +63,12 @@ const MAX_CATCH_UP_STEPS: usize = 64;
 actions!(pomodoro, [ToggleTimer, ResetTimer]);
 
 /// 番茄钟当前所处的阶段。
+///
+/// `serde(rename_all = "lowercase")` 让线上格式是 `"focus"` / `"break"`：
+/// 客户端（`crates/pomodoro`）和服务端（`server/src/models.rs`）必须
+/// 用同一套字符串，否则序列化出来的 JSON 两边读不懂。
 #[derive(Clone, Copy, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Phase {
     /// 专注工作。
     Focus,
@@ -133,8 +137,9 @@ pub struct Pomodoro {
     completed: u32,
     ticker: Option<Task<()>>,
     on_event: Option<EventHandler>,
-    /// 本地 CRUD Store（M0 内存版，M2 可注入联网 Api）
-    pub store: Store<MemoryApi, MemoryPersistence>,
+    /// 本地 CRUD Store。平台通过 `Pomodoro::new_with_store` 注入自己的
+    /// `Api`（联网实现）与 `Persistence`（文件 / localStorage）。
+    pub store: Store,
     new_title: String,
     editing_id: Option<String>,
     edit_input: gpui_kit::Entity<InputState>,
@@ -145,6 +150,14 @@ pub struct Pomodoro {
 impl Pomodoro {
     /// 创建界面并注册快捷键。
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        Self::new_with_store(window, cx, Store::local(crate::store::MemoryPersistence::default()))
+    }
+
+    /// 创建界面并注入自己的 `Store`。
+    ///
+    /// 平台入口用这个构造器把自己的持久化（桌面端文件 / Web 端 localStorage）
+    /// 和可选的联网 `Api` 装进来；业务与界面代码完全不变。
+    pub fn new_with_store(window: &mut Window, cx: &mut Context<Self>, store: Store) -> Self {
         cx.bind_keys([
             KeyBinding::new("space", ToggleTimer, None),
             KeyBinding::new("secondary-r", ResetTimer, None),
@@ -162,7 +175,7 @@ impl Pomodoro {
             completed: 0,
             ticker: None,
             on_event: None,
-            store: Store::new(MemoryApi::new(), MemoryPersistence::default()),
+            store,
             new_title: String::new(),
             editing_id: None,
             edit_input: cx.new(|cx| InputState::new(window, cx).placeholder("输入标题..." )),
@@ -491,6 +504,46 @@ impl Pomodoro {
         self.edit_draft = None;
         cx.notify();
     }
+
+    // ---- 联网同步 ----
+
+    /// 是否已连接后端。
+    pub fn is_online(&self) -> bool {
+        self.store.online
+    }
+
+    /// 待同步的操作数。
+    pub fn pending_count(&self) -> usize {
+        self.store.pending_count()
+    }
+
+    /// 最后一次同步错误。
+    pub fn last_error(&self) -> Option<String> {
+        self.store.last_error.clone()
+    }
+
+    /// 触发一次同步：先推送待同步队列，再拉取远端。
+    ///
+    /// 纯本地模式下（没配后端）直接返回，不报错。
+    pub fn sync(&mut self, cx: &mut Context<Self>) {
+        // 网络 IO 在 store 的快照上跑（`Store` 是 Clone），await 期间
+        // 不持有 `&mut self`，结果回来后再一次性写回。
+        let snapshot = self.store.clone();
+        cx.spawn(async move |this, cx| {
+            let (done, remote, error) = Store::sync_snapshot(&snapshot).await;
+            // update 在实体被释放时返回 None，这是正常情况。
+            let _ = this.update(cx, |this, _cx| {
+                this.store.apply_push(&done);
+                if let Some(remote) = remote {
+                    this.store.merge_remote(remote);
+                }
+                this.store.set_status(error.is_none(), error);
+            });
+            let _ = this.update(cx, |_this, cx| cx.notify());
+        })
+        .detach();
+    }
+
     /// 快捷键处理：重置当前阶段。
     fn on_reset_timer(
         &mut self,
@@ -655,12 +708,58 @@ impl Render for Pomodoro {
                                     .child(format!("历史记录 ({})", count)),
                             )
                             .child(
-                                Button::new("add-record")
-                                    .primary()
-                                    .label("添加记录")
-                                    .on_click(cx.listener(|this, _, _, cx| this.add_record(cx))),
+                                h_flex()
+                                    .gap_1()
+                                    .child(
+                                        Button::new("add-record")
+                                            .primary()
+                                            .label("添加记录")
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                this.add_record(cx);
+                                            })),
+                                    )
+                                    .child(
+                                        Button::new("sync-records")
+                                            .ghost()
+                                            .label("同步")
+                                            .on_click(cx.listener(|this, _, _, cx| this.sync(cx))),
+                                    ),
                             ),
                     )
+                    .child({
+                        // 同步状态条：在线/离线 + 待同步数量 + 上次错误
+                        let pending = self.store.pending_count();
+                        let online = self.store.online;
+                        let error = self.store.last_error.clone();
+                        h_flex()
+                            .gap_2()
+                            .items_center()
+                            .child(
+                                Tag::new()
+                                    .with_variant(if online {
+                                        TagVariant::Success
+                                    } else {
+                                        TagVariant::Secondary
+                                    })
+                                    .child(if online { "已连接" } else { "本地模式" }),
+                            )
+                            .when(pending > 0, |this| {
+                                this.child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(theme.muted_foreground.clone())
+                                        .child(format!("{pending} 条待同步")),
+                                )
+                            })
+                            .when(error.is_some(), |this| {
+                                this.child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(theme.danger_foreground.clone())
+                                        .child(error.clone().unwrap_or_default()),
+                                )
+                            })
+                    })
                     .child(
                         div()
                             .flex()

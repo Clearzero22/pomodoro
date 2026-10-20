@@ -21,11 +21,22 @@ CAP := ./node_modules/.bin/capacitor
 # 所以默认用项目内的 JDK 21；换成自己的 JDK 17-23 用 `make android ANDROID_JDK=/path`。
 ANDROID_JDK ?= $(CURDIR)/tools/jdk-21.0.12.1+1
 
-.PHONY: help desktop desktop-release wasm wasm-release web web-release test all \
-        mobile-sync mobile-assets android clean
+.PHONY: help desktop desktop-release wasm wasm-release web web-release test test-all all \
+        mobile-sync mobile-assets android clean server server-test
 
 help:
 	@grep -E '^[a-z-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
+
+server: ## 启动本地后端 (127.0.0.1:3000, SQLite)
+	cd server && cargo run -p pomodoro-server
+
+server-test: ## 跑后端集成测试
+	cargo test -p pomodoro-server
+
+test-all: ## 跑所有测试 (客户端 + 桌面端 + 服务端)
+	cargo test -p pomodoro
+	cargo test -p pomodoro-desktop
+	cargo test -p pomodoro-server
 
 desktop: ## 开发模式运行桌面应用
 	cargo run -p pomodoro-desktop

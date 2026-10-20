@@ -1,9 +1,10 @@
 [workspace]
 resolver = "2"
-members = [
+    members = [
     "crates/pomodoro",
     "crates/pomodoro-desktop",
     "crates/pomodoro-web",
+    "server",
 ]
 
 [workspace.package]
@@ -28,3 +29,16 @@ uuid = { version = "1.4", features = ["v4", "serde", "js"] }
 async-trait = "0.1"
 chrono = { version = "0.4", features = ["serde", "wasm-bindgen"] }
 thiserror = "1.0"
+
+# Release 构建的参数。WASM 产物要发到浏览器和手机上，体积直接影响首屏速度，
+# 所以这里比 Cargo 默认更激进：体积优先（opt-level = "z"）、开 LTO、
+# 单编译单元（利于跨 crate 内联与去重）。
+#
+# `panic = "abort"` 在这里收益有限却会改变行为（无法 catch_unwind），
+# 因此不启用，保持与桌面端一致的语义。
+[profile.release]
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+strip = true
+panic = "unwind"

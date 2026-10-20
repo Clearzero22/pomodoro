@@ -8,6 +8,9 @@
 //!   `ApplicationHandle` 必须留在 `thread_local!` 里；
 //! - Web 只支持一个顶层窗口，弹窗要用 Kit 的 Root 层。
 
+mod api;
+mod persistence;
+
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -16,8 +19,12 @@ use std::sync::Arc;
 use gpui_kit::component::theme::Theme;
 use gpui_kit::web::{CanvasFontFallback, WebBackendPreference, WebPlatform};
 use gpui_kit::{AppContext as _, Application, ApplicationHandle, WindowOptions, open_window};
+use pomodoro::store::Store;
 use pomodoro::{Phase, Pomodoro, TimerEvent};
 use wasm_bindgen::prelude::*;
+
+use persistence::LocalStoragePersistence;
+use api::FetchApi;
 
 thread_local! {
     static APPLICATION: RefCell<Option<ApplicationHandle>> = const { RefCell::new(None) };
@@ -80,7 +87,11 @@ fn install_notifications(view: &gpui_kit::Entity<Pomodoro>, cx: &mut gpui_kit::A
 /// 应该传 `"webgl"`：WebView 的 WebGPU 探测会在 `is_browser_webgpu_supported()`
 /// 上挂住，导致画面永远停在启动页。
 #[wasm_bindgen]
-pub fn run(asset_endpoint: Option<String>, backend: Option<String>) -> Result<(), JsValue> {
+pub fn run(
+    asset_endpoint: Option<String>,
+    backend: Option<String>,
+    api_url: Option<String>,
+) -> Result<(), JsValue> {
     console_error_panic_hook::set_once();
     console_log::init_with_level(log::Level::Info).expect("Failed to initialize logger");
     tracing_wasm::set_as_global_default();
@@ -130,7 +141,19 @@ pub fn run(asset_endpoint: Option<String>, backend: Option<String>) -> Result<()
         });
 
         open_window(WindowOptions::default(), cx, |window, cx| {
-            let view = cx.new(|cx| Pomodoro::new(window, cx));
+            // 注入 Web 端持久化：记录写在 `localStorage`，
+            // 关掉页面再打开还在。原生壳（Capacitor）用的也是这份
+            // `localStorage`，所以 Android / iOS 上行为与浏览器一致。
+            //
+            // 给了 `api_url` 且本地存着令牌时，后端就是联网模式；
+            // 否则是纯本地模式（界面上完全一样，只是数据不上云）。
+            let store = match (api_url.as_deref(), persistence::load_token()) {
+                (Some(url), Some(token)) => {
+                    Store::new(Some(FetchApi::new(url, Some(token))), LocalStoragePersistence::new())
+                }
+                _ => Store::local(LocalStoragePersistence::new()),
+            };
+            let view = cx.new(|cx| Pomodoro::new_with_store(window, cx, store));
             install_notifications(&view, cx);
             view
         })

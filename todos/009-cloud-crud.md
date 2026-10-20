@@ -1,11 +1,21 @@
 # 009 · 联网数据 CRUD + 云端同步
 
-- **状态**: ⬜ 待开始
+- **状态**: 🟡 进行中 (M0 ✅ / M1 ✅ / M2 ✅ / M3 ✅ / M4 ⬜)
 - **优先级**: P0 (用户指定，覆盖原 M1)
 - **分支**: `feat/009-cloud-crud`
 - **依赖**: 003 持久化 (可并行，先内存版)
 - **预估**: 3-3.5 天 (M0 1天 + M1 1天 + M2 1天 + 联调0.5天)
 - **可行性**: 桌面/Web/PWA 5.0 / Capacitor壳 4.5 / 原生GPUI 1.5(不做)
+
+## 进度
+
+| 阶段 | 状态 | 说明 |
+|---|---|---|
+| **M0 本地CRUD** | ✅ 完成 | `model.rs`/`api.rs`/`store.rs` + 增删改查UI + 35 测试 |
+| **M1 后端** | ✅ 完成 | `server/` Axum + SQLite + JWT，8 集成测试 |
+| **M2 联调** | ✅ 完成 | `HttpApi`(reqwest) + `FetchApi`(gloo-net) + 离线队列 + 4 端到端测试 |
+| **M3 持久化** | ✅ 完成 | `FilePersistence`(桌面) + `LocalStoragePersistence`(Web) |
+| **M4 收尾** | ⬜ 待做 | 登录界面、Token 刷新、统计页接入 |
 
 ---
 
@@ -114,6 +124,20 @@ let api = FetchApi::new(env!("API_URL"), token);
 ---
 
 ## 5. 后端 API 契约
+
+> 实际实现见 [`docs/server.md`](../docs/server.md)。
+
+### 实际实现与原设计的差异
+
+| 项 | 原设计 | 实际 |
+|---|---|---|
+| Api trait | `async fn` 直接用 | `async_trait(?Send)`，WASM 单线程需要 |
+| Store 泛型 | `Store<A: Api, P: Persistence>` | `Store` 内部用 `Rc<dyn Api>`/`Rc<dyn Persistence>`，平台注入不影响视图 |
+| 记录 id | server 生成 | **客户端生成并上传**，服务端原样保存（否则合并出重复） |
+| phase 序列化 | 默认 `"Focus"` | `rename_all = "lowercase"` → `"focus"`，与服务端对齐 |
+| 同步写法 | `store.sync()` 持 `&mut self` | 拆成 `push_pending`/`pull_remote`（无 `&mut`）+ `apply_push`/`merge_remote`（写回） |
+
+> 后两条是实际跑起来才发现的 bug，原因已记在 `docs/server.md`。
 
 ```
 POST   /api/auth/login          {email, password} -> {token, refresh_token}

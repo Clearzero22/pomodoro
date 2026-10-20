@@ -14,3 +14,8 @@ mobile/ios
 mobile/android/build
 mobile/android/app/build
 mobile/android/.gradle
+# 后端的本地 SQLite 数据库与 WAL 文件
+/server/*.db
+/server/*.db-wal
+/server/*.db-shm
+server/pomodoro.db*
