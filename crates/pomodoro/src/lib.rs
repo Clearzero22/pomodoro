@@ -138,6 +138,8 @@ pub struct Pomodoro {
     new_title: String,
     editing_id: Option<String>,
     edit_input: gpui_kit::Entity<InputState>,
+    /// test-only draft, bypasses InputState Window requirement
+    edit_draft: Option<String>,
 }
 
 impl Pomodoro {
@@ -164,6 +166,7 @@ impl Pomodoro {
             new_title: String::new(),
             editing_id: None,
             edit_input: cx.new(|cx| InputState::new(window, cx).placeholder("输入标题..." )),
+            edit_draft: None,
         }
     }
 
@@ -418,6 +421,10 @@ impl Pomodoro {
         self.store.delete_local(id);
         cx.notify();
     }
+    pub fn update_record_title(&mut self, id: &str, title: Option<String>, cx: &mut Context<Self>) {
+        self.store.update_local(id, title);
+        cx.notify();
+    }
     pub fn start_edit(&mut self, id: &str, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(rec) = self.store.list().iter().find(|r| r.id == id) {
             let title = rec.title.clone().unwrap_or_default();
@@ -429,7 +436,11 @@ impl Pomodoro {
     }
     pub fn save_edit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(id) = self.editing_id.clone() {
-            let raw = self.edit_input.read(cx).value().to_string();
+            let raw = if let Some(draft) = self.edit_draft.take() {
+                draft
+            } else {
+                self.edit_input.read(cx).value().to_string()
+            };
             let title = if raw.trim().is_empty() {
                 None
             } else {
@@ -437,14 +448,47 @@ impl Pomodoro {
             };
             self.store.update_local(&id, title);
             self.editing_id = None;
-            // 清空输入防止下次复用旧值
             self.edit_input.update(cx, |s, cx| s.set_value("", window, cx));
             cx.notify();
         }
     }
     pub fn cancel_edit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.editing_id = None;
+        self.edit_draft = None;
         self.edit_input.update(cx, |s, cx| s.set_value("", window, cx));
+        cx.notify();
+    }
+    // ---- test helpers (no Window needed) ----
+    #[doc(hidden)]
+    pub fn editing_id(&self) -> Option<String> {
+        self.editing_id.clone()
+    }
+    #[doc(hidden)]
+    pub fn start_edit_for_test(&mut self, id: &str, cx: &mut Context<Self>) {
+        if self.store.list().iter().any(|r| r.id == id) {
+            self.editing_id = Some(id.to_string());
+            self.edit_draft = None;
+            cx.notify();
+        }
+    }
+    #[doc(hidden)]
+    pub fn set_edit_draft_for_test(&mut self, draft: String) {
+        self.edit_draft = Some(draft);
+    }
+    #[doc(hidden)]
+    pub fn save_edit_for_test(&mut self, cx: &mut Context<Self>) {
+        if let Some(id) = self.editing_id.clone() {
+            let raw = self.edit_draft.take().unwrap_or_default();
+            let title = if raw.trim().is_empty() { None } else { Some(raw.trim().to_string()) };
+            self.store.update_local(&id, title);
+            self.editing_id = None;
+            cx.notify();
+        }
+    }
+    #[doc(hidden)]
+    pub fn cancel_edit_for_test(&mut self, cx: &mut Context<Self>) {
+        self.editing_id = None;
+        self.edit_draft = None;
         cx.notify();
     }
     /// 快捷键处理：重置当前阶段。
