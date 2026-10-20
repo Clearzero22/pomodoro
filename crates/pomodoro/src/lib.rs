@@ -44,6 +44,10 @@ use gpui_kit::{
     Styled as _, Task, Window, actions, div, rems,
 };
 
+use crate::api::MemoryApi;
+use crate::store::{MemoryPersistence, Store};
+use gpui_kit::gpui::prelude::FluentBuilder as _;
+
 /// 专注阶段的时长。
 pub const FOCUS_SECONDS: u64 = 25 * 60;
 /// 休息阶段的时长。
@@ -128,6 +132,9 @@ pub struct Pomodoro {
     completed: u32,
     ticker: Option<Task<()>>,
     on_event: Option<EventHandler>,
+    /// 本地 CRUD Store（M0 内存版，M2 可注入联网 Api）
+    pub store: Store<MemoryApi, MemoryPersistence>,
+    new_title: String,
 }
 
 impl Pomodoro {
@@ -150,6 +157,8 @@ impl Pomodoro {
             completed: 0,
             ticker: None,
             on_event: None,
+            store: Store::new(MemoryApi::new(), MemoryPersistence::default()),
+            new_title: String::new(),
         }
     }
 
@@ -376,6 +385,25 @@ impl Pomodoro {
         self.toggle(cx);
     }
 
+    // ---- CRUD 展示层（M0 本地版） ----
+    pub fn records(&self) -> &[crate::model::PomodoroRecord] {
+        self.store.list()
+    }
+    pub fn add_record(&mut self, cx: &mut Context<Self>) {
+        let title = if self.new_title.trim().is_empty() {
+            None
+        } else {
+            Some(self.new_title.trim().to_string())
+        };
+        self.store
+            .create_local(title, self.phase, self.phase.duration().as_secs() as u32);
+        self.new_title.clear();
+        cx.notify();
+    }
+    pub fn delete_record(&mut self, id: &str, cx: &mut Context<Self>) {
+        self.store.delete_local(id);
+        cx.notify();
+    }
     /// 快捷键处理：重置当前阶段。
     fn on_reset_timer(
         &mut self,
@@ -513,5 +541,114 @@ impl Render for Pomodoro {
                     .text_color(theme.muted_foreground)
                     .child(shortcut_hint),
             )
+            .child({
+                // 数据展示 CRUD（M0 本地版，M2 切联网不改 UI）
+                let records = self.store.list().to_vec();
+                let count = records.len();
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .w_full()
+                    .max_w(rems(24.))
+                    .mt_2()
+                    .border_1()
+                    .border_color(theme.border.clone())
+                    .rounded_lg()
+                    .p_3()
+                    .bg(theme.background)
+                    .child(
+                        h_flex()
+                            .justify_between()
+                            .items_center()
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_weight(gpui_kit::gpui::FontWeight::SEMIBOLD)
+                                    .child(format!("历史记录 ({})", count)),
+                            )
+                            .child(
+                                Button::new("add-record")
+                                    .primary()
+                                    .label("添加记录")
+                                    .on_click(cx.listener(|this, _, _, cx| this.add_record(cx))),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .max_h(rems(10.))
+                            .when(count == 0, |this| {
+                                this.child(
+                                    div()
+                                        .text_sm()
+                                        .text_color(theme.muted_foreground.clone())
+                                        .child("暂无记录 · 完成一个番茄或点添加"),
+                                )
+                            })
+                            .children(records.into_iter().map(|rec| {
+                                let id = rec.id.clone();
+                                let title = rec
+                                    .title
+                                    .clone()
+                                    .unwrap_or_else(|| "未命名".to_string());
+                                let phase_label = rec.phase.label();
+                                let date = rec.date_str();
+                                h_flex()
+                                    .justify_between()
+                                    .items_center()
+                                    .gap_2()
+                                    .px_2()
+                                    .py_1()
+                                    .rounded_md()
+                                    .bg(theme.muted.clone())
+                                    .child(
+                                        h_flex()
+                                            .gap_2()
+                                            .items_center()
+                                            .child(
+                                                Tag::new()
+                                                    .with_variant(if rec.phase == Phase::Focus {
+                                                        TagVariant::Primary
+                                                    } else {
+                                                        TagVariant::Success
+                                                    })
+                                                    .child(phase_label),
+                                            )
+                                            .child(
+                                                div()
+                                                    .flex()
+                                                    .flex_col()
+                                                    .child(
+                                                        div()
+                                                            .text_sm()
+                                                            .child(title.clone()),
+                                                    )
+                                                    .child(
+                                                        div()
+                                                            .text_xs()
+                                                            .text_color(
+                                                                theme.muted_foreground.clone(),
+                                                            )
+                                                            .child(format!(
+                                                                "{} · {}s",
+                                                                date, rec.duration_secs
+                                                            )),
+                                                    ),
+                                            ),
+                                    )
+                                    .child(
+                                        Button::new(gpui_kit::gpui::SharedString::from(id.clone()))
+                                            .ghost()
+                                            .label("删除")
+                                            .on_click(cx.listener(move |this, _, _, cx| {
+                                                this.delete_record(&id, cx);
+                                            })),
+                                    )
+                            })),
+                    )
+            })
     }
 }
